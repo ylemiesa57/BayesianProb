@@ -1,11 +1,11 @@
-#Project working with Dr. Ranjan Pal
+# Project working with Dr. Ranjan Pal
 
 Developing bayesian network algorithm for inference and simulating cyber networks with a host privilege based attack graph
 
-##future: AI applications
+## future: AI applications
 
 
-###Here's how we access it:
+### Here's how we access it:
 
 self.cpts[node] gives us the entire CPT dictionary for 'user(2)'
 parent_values[0] gives us the state of the parent node ('<ssh, 1, 2>')
