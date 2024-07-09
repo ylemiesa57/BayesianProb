@@ -135,3 +135,91 @@ print(inf)
 #checked by thinking about monty hall problem
 inf1 = bn.inference(target_node='Prize', Guest='A', Monty='C')
 print(inf1)
+
+
+
+cyberbn = BayesianNetwork()
+
+cyberbn.add_node('<Dos, 0, 1>', ['T', 'F'])
+cyberbn.add_node('<Exec, 0, 1>', ['T', 'F'])
+cyberbn.add_node('user(1)', ['T', 'F'])
+cyberbn.add_node('<1, 2>', ['T', 'F'])
+cyberbn.add_node('ssh(2)', ['T', 'F'])
+cyberbn.add_node('<ssh, 1, 2>', ['T', 'F'])
+cyberbn.add_node('user(2)', ['T', 'F'])
+
+# probability of the S=T, N=T, or L=T is based on random probability or simply how hard ech thing is to access
+# service (s), connection (n), privilege (L) --> need to be satisfied as preconditions for vulnerability to be reached
+# postconditions occur only when that vulnerability or one of the same level is exploited
+
+cyberbn.add_edge('<Dos, 0, 1>', 'user(1)')
+cyberbn.add_edge('<Exec, 0, 1>', 'user(1)')
+
+cyberbn.add_edge('<1, 2>', '<ssh, 1, 2>')
+cyberbn.add_edge('user(1)', '<ssh, 1, 2>')
+cyberbn.add_edge('ssh(2)', '<ssh, 1, 2>')
+
+cyberbn.add_edge('<ssh, 1, 2>', 'user(2)')
+
+#####
+
+#THESE NEED TO BE CALCULATED INDEPNEDENTLY!!! BUT FOR NOW WE ARE JUST GOING WITH THIS!!!!!
+vul_dos_0_1_cpt = {'T': 1./2, 'F': 1./2}
+
+vul_exec_0_1_cpt = {'T': 1./2, 'F': 1./2}
+
+
+#edges assigned order match order of which column is which
+priv_user_1_cpt = { ('T', 'T'): {'T': 0.93, 'F': .07},
+                   ('T', 'F'): {'T': .093, 'F': .07},
+                   ('F', 'T'): {'T': .093, 'F': .07},
+                   ('F', 'F'): {'T': 0, 'F': 1} }
+
+conn_1_2_cpt = {'T': 1./2, 'F': 1./2}
+
+serv_ssh_2_cpt = {'T': 1./2, 'F': 1./2}
+
+
+## vul calculator = p(v | s = T, N = T, L = T) = CVSS(v)/10
+vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
+                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
+
+priv_user_2_cpt = {('T'): {'T': 1, 'F': 0},
+                   ('F'): {'T': 0, 'F': 1} }
+
+cyberbn.set_cpt('<Dos, 0, 1>', vul_dos_0_1_cpt)
+cyberbn.set_cpt('<Exec, 0, 1>', vul_exec_0_1_cpt)
+cyberbn.set_cpt('user(1)', priv_user_1_cpt)
+cyberbn.set_cpt('<1, 2>', conn_1_2_cpt)
+cyberbn.set_cpt('ssh(2)', serv_ssh_2_cpt)
+cyberbn.set_cpt('<ssh, 1, 2>', vul_ssh_1_2_cpt)
+cyberbn.set_cpt('user(2)', priv_user_2_cpt)
+
+inf = cyberbn.inference(target_node='<ssh, 1, 2>')
+print(inf)
+
+
+
+
+'''
+Traceback (most recent call last):
+  File "/Users/yaphetlemiesa/Documents/Summer Urop/Bayesian Probabilities with Pomegranate.py", line 276, in <module>
+    inf = cyberbn.inference(target_node='<ssh, 1, 2>')
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yaphetlemiesa/Documents/Summer Urop/Bayesian Probabilities with Pomegranate.py", line 153, in inference
+    joint_prob = self.joint_probability(**full_assignment)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yaphetlemiesa/Documents/Summer Urop/Bayesian Probabilities with Pomegranate.py", line 116, in joint_probability
+    prob *= self.cpts[node][parent_values][value]
+            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: ('T',)
+'''
+
+
+
