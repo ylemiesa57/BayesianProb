@@ -26,7 +26,28 @@ class BayesianNetwork:
                 parents.append(parent)
         return parents
 
-    #set the kwargs to what you want each variable to be in terms of state
+    #set the kwargs to what you want each variable to be in terms of state. bascilly testing prob of certain conditions being true
+    def joint_probability(self, **kwargs):
+        prob = 1.0
+        for node, value in kwargs.items():
+            parents = self.get_parents(node)
+
+            #if there is no parents for node
+            if not parents:
+                prob *= self.cpts[node][value]
+
+            #if it is a child node, and has parents
+            else:
+                parent_values = tuple(kwargs[parent] for parent in parents)
+                # add handling here to compare if the parent is only 1, which if is the case
+                if len(parents) == 1:
+                    prob *= self.cpts[node][parent_values[0]][value]
+                else:
+                    prob *= self.cpts[node][parent_values][value]
+                prob *= self.cpts[node][parent_values][value]
+        return prob
+    
+
     def joint_probability(self, **kwargs):
         prob = 1.0
         for node, value in kwargs.items():
@@ -35,11 +56,14 @@ class BayesianNetwork:
             #if a parent node itself of the child node
             if not parents:
                 prob *= self.cpts[node][value]
-
-            #if child node
+            
             else:
                 parent_values = tuple(kwargs[parent] for parent in parents)
-                prob *= self.cpts[node][parent_values][value]
+                # add handling here to compare if the parent is only 1, which if is the case
+                if len(parents) == 1:
+                    prob *= self.cpts[node][parent_values[0]][value]
+                else:
+                    prob *= self.cpts[node][parent_values][value]
         return prob
 
     # should return the probability for each state of a random variable based on its parent nodes and the relationships
@@ -190,8 +214,10 @@ vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
                    ('F', 'T', 'F'): {'T': 0, 'F': 1},
                    ('F', 'F', 'F'): {'T': 0, 'F': 1} }
 
-priv_user_2_cpt = {('T'): {'T': 1, 'F': 0},
-                   ('F'): {'T': 0, 'F': 1} }
+# Needed to add handling here because of the fact that the function joint_probability can't understand single parent node
+# needed to add handling for this.
+priv_user_2_cpt = {'T': {'T': 1, 'F': 0},
+                   'F': {'T': 0, 'F': 1} }
 
 cyberbn.set_cpt('<Dos, 0, 1>', vul_dos_0_1_cpt)
 cyberbn.set_cpt('<Exec, 0, 1>', vul_exec_0_1_cpt)
