@@ -1,4 +1,4 @@
-# Project working with Dr. Ranjan Pal
+# Bayesian Network for UROP under Dr. Ranjan Pal
 
 Developing bayesian network algorithm for inference and simulating cyber networks with a host privilege based attack graph
 
