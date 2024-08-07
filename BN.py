@@ -1,12 +1,28 @@
 ###Code from scratch model, copying the functionality of pomegranate
 import numpy as np
+from scipy import stats
 import itertools
+import copy
+
+#normal dist: N(0,1)
+#Heavy tailed dist: Pareto
+
+def sample_truncated_normal(mean=0, std=1, low=0, high=1):
+    # Calculate the lower and upper bounds for the distribution
+    a = (low - mean) / std
+    b = (high - mean) / std
+    
+    # Generate a random sample
+    return float(stats.truncnorm.rvs(a, b, loc=mean, scale=std))
 
 class BayesianNetwork:
     def __init__(self):
         self.nodes = {}
         self.edges = {}
         self.cpts = {}
+
+    def copy_cpt(self):
+        return copy.deepcopy
 
     def add_node(self, name, values):
         self.nodes[name] = values
@@ -15,6 +31,7 @@ class BayesianNetwork:
         if parent not in self.edges:
             self.edges[parent] = []
         self.edges[parent].append(child)
+        print(f"Edge added: {parent} -> {child}")
 
     def set_cpt(self, node, cpt):
         self.cpts[node] = cpt
@@ -26,51 +43,42 @@ class BayesianNetwork:
                 parents.append(parent)
         return parents
 
-    # #set the kwargs to what you want each variable to be in terms of state. bascilly testing prob of certain conditions being true
-    # def joint_probability(self, **kwargs):
-    #     '''
-    #     pass in all nodes in kwargs to do inference
-    #     '''
-    #     prob = 0
-    #     # Get all nodes not in kwargs
-    #     missing_nodes = [node for node in self.nodes if node not in kwargs]
-        
-    #     # Generate all possible combinations for missing nodes, IF THERE ARE MISSING NODES. SHOULDN'T BE!!!!!
-    #     for combination in itertools.product(*[self.nodes[node] for node in missing_nodes]):
-    #         full_assignment = kwargs.copy()
-    #         full_assignment.update(dict(zip(missing_nodes, combination)))
-            
-    #         temp_prob = 1
-    #         for node, value in full_assignment.items():
-    #             parents = self.get_parents(node)
-    #             # if no parents
-    #             if not parents:
-    #                 temp_prob *= self.cpts[node][value]
-    #             # if it has parents
-    #             else:
-    #                 parent_values = tuple(full_assignment[parent] for parent in parents)
-    #                 if len(parents) == 1:
-    #                     temp_prob *= self.cpts[node][parent_values[0]][value]
-    #                 else:
-    #                     temp_prob *= self.cpts[node][parent_values][value]
-            
-    #         prob += temp_prob
-        
-    #     return prob
-    
+    def get_ind_ancestors(self, node, visited=None):
+        if visited is None:
+            visited = set()
 
+        if node in visited:
+            return set()
+
+        visited.add(node)
+        parents = self.get_parents(node)
+
+        if not parents:
+            return {node}
+
+        ancestors = set()
+        for parent in parents:
+            ancestors.update(self.get_ind_ancestors(parent, visited))
+
+        return ancestors
+    
+    def modify_ind_cpt(self, node, change):
+        self.cpts[node]['T'] = (self.cpts[node]['T'] + change) % 1
+        self.cpts[node]['F'] = 1 - self.cpts[node]['T']
+        
     def joint_probability(self, **kwargs):
         prob = 1.0
         for node, value in kwargs.items():
             parents = self.get_parents(node)
+            print(f"Node: {node}, Parents: {parents}, Value: {value}")
 
-            #if a parent node itself of the child node
             if not parents:
                 prob *= self.cpts[node][value]
-            
             else:
                 parent_values = tuple(kwargs[parent] for parent in parents)
-                # add handling here to compare if the parent is only 1, which if is the case
+                print(f"Parent values: {parent_values}")
+                print(f"CPT keys for {node}: {list(self.cpts[node].keys())}")
+                
                 if len(parents) == 1:
                     prob *= self.cpts[node][parent_values[0]][value]
                 else:
@@ -123,6 +131,8 @@ class BayesianNetwork:
             target_probabilities[state] /= total_prob
 
         return target_probabilities
+
+
 
         
 
@@ -179,6 +189,11 @@ print("############################")
 
 cyberbn = BayesianNetwork()
 
+cyberbn.add_node('Dos(1)', ['T', 'F'])
+cyberbn.add_node('user(0)', ['T', 'F'])
+cyberbn.add_node('<0,1>', ['T', 'F'])
+cyberbn.add_node('Exec(1)', ['T', 'F'])
+
 cyberbn.add_node('<Dos, 0, 1>', ['T', 'F'])
 cyberbn.add_node('<Exec, 0, 1>', ['T', 'F'])
 cyberbn.add_node('user(1)', ['T', 'F'])
@@ -191,6 +206,15 @@ cyberbn.add_node('user(2)', ['T', 'F'])
 # service (s), connection (n), privilege (L) --> need to be satisfied as preconditions for vulnerability to be reached
 # postconditions occur only when that vulnerability or one of the same level is exploited
 
+cyberbn.add_edge('Dos(1)', '<Dos, 0, 1>')
+cyberbn.add_edge('user(0)', '<Dos, 0, 1>')
+cyberbn.add_edge('<0,1>', '<Dos, 0, 1>')
+
+cyberbn.add_edge('user(0)', '<Exec, 0, 1>')
+cyberbn.add_edge('<0,1>', '<Exec, 0, 1>')
+cyberbn.add_edge('Exec(1)', '<Exec, 0, 1>')
+
+
 cyberbn.add_edge('<Dos, 0, 1>', 'user(1)')
 cyberbn.add_edge('<Exec, 0, 1>', 'user(1)')
 
@@ -200,12 +224,56 @@ cyberbn.add_edge('ssh(2)', '<ssh, 1, 2>')
 
 cyberbn.add_edge('<ssh, 1, 2>', 'user(2)')
 
-#####
-
 #THESE NEED TO BE CALCULATED INDEPNEDENTLY!!! BUT FOR NOW WE ARE JUST GOING WITH THIS!!!!!
-vul_dos_0_1_cpt = {'T': 1./2, 'F': 1./2}
 
-vul_exec_0_1_cpt = {'T': 1./2, 'F': 1./2}
+#generating the probs for independent probs using normal distribution
+
+a = sample_truncated_normal()
+
+serv_Dos_1_cpt = {'T': a, 'F': 1-a}
+
+b = sample_truncated_normal()
+
+priv_user_0_cpt = {'T': b, 'F': 1-b}
+
+c = sample_truncated_normal()
+
+conn_0_1_cpt = {'T': c, 'F': 1-c}
+
+d = sample_truncated_normal()
+
+serv_Exec_1_cpt = {'T': d, 'F': 1-d}
+
+e = sample_truncated_normal()
+
+conn_1_2_cpt = {'T': e, 'F': 1-e}
+
+f = sample_truncated_normal()
+
+serv_ssh_2_cpt = {'T': f, 'F': 1-f}
+
+# vul_dos_0_1_cpt = {'T': 1./2, 'F': 1./2}
+
+#p(v_dos| pre conditions all true) = CVSS(v) / 10. 
+vul_dos_0_1_cpt = { ('T', 'T', 'T'): {'T': .53, 'F': .47},
+                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
+
+# vul_exec_0_1_cpt = {'T': 1./2, 'F': 1./2}
+
+vul_exec_0_1_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
+                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
+                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
+                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
+                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
 
 
 #edges assigned order match order of which column is which
@@ -213,10 +281,6 @@ priv_user_1_cpt = { ('T', 'T'): {'T': 0.93, 'F': .07},
                    ('T', 'F'): {'T': .093, 'F': .07},
                    ('F', 'T'): {'T': .093, 'F': .07},
                    ('F', 'F'): {'T': 0, 'F': 1} }
-
-conn_1_2_cpt = {'T': 1./2, 'F': 1./2}
-
-serv_ssh_2_cpt = {'T': 1./2, 'F': 1./2}
 
 
 ## vul calculator = p(v | s = T, N = T, L = T) = CVSS(v)/10
@@ -234,6 +298,11 @@ vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
 priv_user_2_cpt = {'T': {'T': 1, 'F': 0},
                    'F': {'T': 0, 'F': 1} }
 
+cyberbn.set_cpt('Dos(1)', serv_Dos_1_cpt)
+cyberbn.set_cpt('user(0)', priv_user_0_cpt)
+cyberbn.set_cpt('<0,1>', conn_0_1_cpt)
+cyberbn.set_cpt('Exec(1)', serv_Exec_1_cpt)
+
 cyberbn.set_cpt('<Dos, 0, 1>', vul_dos_0_1_cpt)
 cyberbn.set_cpt('<Exec, 0, 1>', vul_exec_0_1_cpt)
 cyberbn.set_cpt('user(1)', priv_user_1_cpt)
@@ -242,10 +311,14 @@ cyberbn.set_cpt('ssh(2)', serv_ssh_2_cpt)
 cyberbn.set_cpt('<ssh, 1, 2>', vul_ssh_1_2_cpt)
 cyberbn.set_cpt('user(2)', priv_user_2_cpt)
 
+print("Parents of <Dos, 0, 1>:", cyberbn.get_parents('<Dos, 0, 1>'))
+
 print("Attack graph tests")
 
 inf = cyberbn.inference(target_node='<ssh, 1, 2>')
 print("Inference on <ssh, 1, 2>. Return prob dist: ", inf)
+
+print(cyberbn.get_ind_ancestors('<ssh, 1, 2>'))
 
 print("###########")
 
