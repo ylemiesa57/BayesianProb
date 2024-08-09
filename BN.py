@@ -21,7 +21,8 @@ def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
         return float(stats.truncnorm.rvs(a, b, loc=mean, scale=std))
     elif interest == 'pareto':
         shape = std
-        return float(stats.truncpareto.rvs(a, b, loc=0, scale=1, size=1, random_state=None))
+        #to be able to customize later
+        return float(stats.truncpareto.rvs(1, 2) - 1)
     else:
         raise ValueError("Invalid 'interest' parameter. Must be 'normal' or 'pareto'.")
 
@@ -155,7 +156,7 @@ class BayesianNetwork:
                         #select distribution here
                         gen_noise = sample_truncated(0,noise_std,0,1, normal_or_pareto)
                         if normal_or_pareto == "pareto":
-                            gen_noise = sample_truncated(1,noise_std,1,5, normal_or_pareto)
+                            gen_noise = sample_truncated(std=noise_std,low=1,high=2, interest=normal_or_pareto)
 
                         pos_or_neg = np.random.normal(0, noise_std)
                         if pos_or_neg < 0:
@@ -197,8 +198,7 @@ class BayesianNetwork:
                 diff_p.append(abs(infs[i] - sim) * 1./100)
             diffs.append(diff_p)
         
-        # at this point we have three lists of data points for three of our sets. plot.
-        # diffs = [ [], [], []]
+
 
 
         print(len(diffs[0]),len(diffs[1]), len(diffs[2]))
@@ -221,14 +221,16 @@ class BayesianNetwork:
             ))
 
         fig.update_layout(
-            title=f'Inference Error due to f{normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
-            xaxis_title='Rank of Centrality (In degree- Left to Right)',
-            yaxis_title='Inference Error'
+            title=f'Inference Error due to {normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
+            xaxis_title='Rank of Centrality',
+            yaxis_title='Inference Error',
         )
 
         fig.show()
 
         return 'Completed'
+
+
 
 
 
