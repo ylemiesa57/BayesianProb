@@ -78,8 +78,7 @@ vul_dos_0_1_cpt = { ('T', 'T', 'T'): {'T': .53, 'F': .47},
                    ('F', 'T', 'F'): {'T': 0, 'F': 1},
                    ('F', 'F', 'F'): {'T': 0, 'F': 1} }
 
-# vul_exec_0_1_cpt = {'T': 1./2, 'F': 1./2}
-
+## vul calculator = p(v | s = T, N = T, L = T) = CVSS(v)/10
 vul_exec_0_1_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
                    ('T', 'T', 'F'): {'T': 0, 'F': 1},
                    ('T', 'F', 'T'): {'T': 0, 'F': 1},
@@ -92,8 +91,8 @@ vul_exec_0_1_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
 
 #edges assigned order match order of which column is which
 priv_user_1_cpt = { ('T', 'T'): {'T': 0.93, 'F': .07},
-                   ('T', 'F'): {'T': .093, 'F': .07},
-                   ('F', 'T'): {'T': .093, 'F': .07},
+                   ('T', 'F'): {'T': 0.93, 'F': .07},
+                   ('F', 'T'): {'T': 0.93, 'F': .07},
                    ('F', 'F'): {'T': 0, 'F': 1} }
 
 
