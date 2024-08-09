@@ -3,17 +3,27 @@ import numpy as np
 from scipy import stats
 import itertools
 import copy
+import plotly.graph_objects as go
+import pandas as pd
 
 #normal dist: N(0,1)
 #Heavy tailed dist: Pareto
 
-def sample_truncated_normal(mean=0, std=1, low=0, high=1):
+import scipy.stats as stats
+
+def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
     # Calculate the lower and upper bounds for the distribution
     a = (low - mean) / std
     b = (high - mean) / std
     
     # Generate a random sample
-    return float(stats.truncnorm.rvs(a, b, loc=mean, scale=std))
+    if interest == 'normal':
+        return float(stats.truncnorm.rvs(a, b, loc=mean, scale=std))
+    elif interest == 'pareto':
+        shape = std
+        return float(stats.truncpareto.rvs(a, b, loc=0, scale=1, size=1, random_state=None))
+    else:
+        raise ValueError("Invalid 'interest' parameter. Must be 'normal' or 'pareto'.")
 
 class BayesianNetwork:
     def __init__(self):
@@ -22,7 +32,7 @@ class BayesianNetwork:
         self.cpts = {}
 
     def copy_cpt(self):
-        return copy.deepcopy
+        return copy.deepcopy(self.cpts)
 
     def add_node(self, name, values):
         self.nodes[name] = values
@@ -31,7 +41,6 @@ class BayesianNetwork:
         if parent not in self.edges:
             self.edges[parent] = []
         self.edges[parent].append(child)
-        print(f"Edge added: {parent} -> {child}")
 
     def set_cpt(self, node, cpt):
         self.cpts[node] = cpt
@@ -70,14 +79,11 @@ class BayesianNetwork:
         prob = 1.0
         for node, value in kwargs.items():
             parents = self.get_parents(node)
-            print(f"Node: {node}, Parents: {parents}, Value: {value}")
 
             if not parents:
                 prob *= self.cpts[node][value]
             else:
                 parent_values = tuple(kwargs[parent] for parent in parents)
-                print(f"Parent values: {parent_values}")
-                print(f"CPT keys for {node}: {list(self.cpts[node].keys())}")
                 
                 if len(parents) == 1:
                     prob *= self.cpts[node][parent_values[0]][value]
@@ -131,194 +137,100 @@ class BayesianNetwork:
             target_probabilities[state] /= total_prob
 
         return target_probabilities
+    
+    def sensitivity_analysis(self, target_node, normal_or_pareto):
+        #variables to set here
+        num_runs = 1000
+        noise_std = 1
+
+        original_bn_cpts = self.copy_cpt()
+        ind_ancestors = self.get_ind_ancestors(target_node)
+
+        inference_results = []
+        for round in range(num_runs):
+            for node in ind_ancestors:
+                #cautious check to make sure the cpts of node can be even updated
+                if node in self.cpts:
+                    for state in self.cpts[node]:
+                        #select distribution here
+                        gen_noise = sample_truncated(0,noise_std,0,1, normal_or_pareto)
+                        if normal_or_pareto == "pareto":
+                            gen_noise = sample_truncated(1,noise_std,1,5, normal_or_pareto)
+
+                        pos_or_neg = np.random.normal(0, noise_std)
+                        if pos_or_neg < 0:
+                            pos_or_neg = -1
+                        pos_or_neg = 1
 
 
+                        #below just makes it so that the output state is always been 0 and 1
+                        self.cpts[node][state] = min(max(self.cpts[node][state] + pos_or_neg*gen_noise, 0), 1)
+                        
 
+
+                #divide by sum to normalize to 1
+                total_prob = sum(self.cpts[node].values())
+                for state in self.cpts[node]:
+                    self.cpts[node][state] /= total_prob
+                
+                #perform inference
+                inference_result = self.inference(target_node)
+                inference_results.append(inference_result['T'])
+
+                print(target_node, node, round)
+
+                #go back to orgiinal version of cpts
+                self.cpts = copy.deepcopy(original_bn_cpts)
+
+        return inference_results
+    
+    def model(self, top_arrs: list[list], infs: list[int], nodes: list[str], normal_or_pareto) -> str:
+
+        #each input is a sim result prob for 'T' state
+
+        #for each sim result, get the truth value
+        diffs = []
+        for i, selected in enumerate(top_arrs):
+            diff_p = []
+            for y, sim in enumerate(selected):
+                #Calculate the corresponding errors as diff, abs, percents
+                diff_p.append(abs(infs[i] - sim) * 1./100)
+            diffs.append(diff_p)
+        
+        # at this point we have three lists of data points for three of our sets. plot.
+        # diffs = [ [], [], []]
+
+
+        print(len(diffs[0]),len(diffs[1]), len(diffs[2]))
+
+
+        max_len = max([len(ele) for ele in diffs])
+
+        for diff in diffs:
+            if len(diff) < max_len:
+                diff.extend([""]*(max_len-len(diff)))
         
 
-# Initialize the Bayesian Network
-bn = BayesianNetwork()
+        df = pd.DataFrame(dict(zip(nodes, diffs)))
 
-# Add nodes (Guest, Prize, Monty) and their values
-bn.add_node('Guest', ['A', 'B', 'C'])
-bn.add_node('Prize', ['A', 'B', 'C'])
-bn.add_node('Monty', ['A', 'B', 'C'])
+        fig = go.Figure()
+        for i, node in enumerate(nodes):
+            fig.add_trace(go.Box(
+                y=df[node],
+                name=node
+            ))
 
-# Add edges
-bn.add_edge('Guest', 'Monty')
-bn.add_edge('Prize', 'Monty')
+        fig.update_layout(
+            title=f'Inference Error due to f{normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
+            xaxis_title='Rank of Centrality (In degree- Left to Right)',
+            yaxis_title='Inference Error'
+        )
 
-# Define the CPTs
-guest_cpt = {'A': 1./3, 'B': 1./3, 'C': 1./3}
-prize_cpt = {'A': 1./3, 'B': 1./3, 'C': 1./3}
-monty_cpt = {
-    ('A', 'A'): {'A': 0.0, 'B': 0.5, 'C': 0.5},
-    ('A', 'B'): {'A': 0.0, 'B': 0.0, 'C': 1.0},
-    ('A', 'C'): {'A': 0.0, 'B': 1.0, 'C': 0.0},
-    ('B', 'A'): {'A': 0.0, 'B': 0.0, 'C': 1.0},
-    ('B', 'B'): {'A': 0.5, 'B': 0.0, 'C': 0.5},
-    ('B', 'C'): {'A': 1.0, 'B': 0.0, 'C': 0.0},
-    ('C', 'A'): {'A': 0.0, 'B': 1.0, 'C': 0.0},
-    ('C', 'B'): {'A': 1.0, 'B': 0.0, 'C': 0.0},
-    ('C', 'C'): {'A': 0.5, 'B': 0.5, 'C': 0.0}
-}
+        fig.show()
 
-# Set the CPTs in the network
-bn.set_cpt('Guest', guest_cpt)
-bn.set_cpt('Prize', prize_cpt)
-bn.set_cpt('Monty', monty_cpt)
+        return 'Completed'
 
 
-print("Monty Hall Tests!")
-
-# Example of computing a joint probability
-jp = bn.joint_probability(Guest='A', Prize='B', Monty='C')
-print(f'Joint Probability P(Guest=A, Prize=B, Monty=C): {jp}')
-
-# Example of calculating inference
-inf = bn.inference(target_node='Prize')
-print(inf)
 
 
-#checked by thinking about monty hall problem
-inf1 = bn.inference(target_node='Prize', Guest='A', Monty='C')
-print(inf1)
-
-print("############################")
-
-
-cyberbn = BayesianNetwork()
-
-cyberbn.add_node('Dos(1)', ['T', 'F'])
-cyberbn.add_node('user(0)', ['T', 'F'])
-cyberbn.add_node('<0,1>', ['T', 'F'])
-cyberbn.add_node('Exec(1)', ['T', 'F'])
-
-cyberbn.add_node('<Dos, 0, 1>', ['T', 'F'])
-cyberbn.add_node('<Exec, 0, 1>', ['T', 'F'])
-cyberbn.add_node('user(1)', ['T', 'F'])
-cyberbn.add_node('<1, 2>', ['T', 'F'])
-cyberbn.add_node('ssh(2)', ['T', 'F'])
-cyberbn.add_node('<ssh, 1, 2>', ['T', 'F'])
-cyberbn.add_node('user(2)', ['T', 'F'])
-
-# probability of the S=T, N=T, or L=T is based on random probability or simply how hard ech thing is to access
-# service (s), connection (n), privilege (L) --> need to be satisfied as preconditions for vulnerability to be reached
-# postconditions occur only when that vulnerability or one of the same level is exploited
-
-cyberbn.add_edge('Dos(1)', '<Dos, 0, 1>')
-cyberbn.add_edge('user(0)', '<Dos, 0, 1>')
-cyberbn.add_edge('<0,1>', '<Dos, 0, 1>')
-
-cyberbn.add_edge('user(0)', '<Exec, 0, 1>')
-cyberbn.add_edge('<0,1>', '<Exec, 0, 1>')
-cyberbn.add_edge('Exec(1)', '<Exec, 0, 1>')
-
-
-cyberbn.add_edge('<Dos, 0, 1>', 'user(1)')
-cyberbn.add_edge('<Exec, 0, 1>', 'user(1)')
-
-cyberbn.add_edge('<1, 2>', '<ssh, 1, 2>')
-cyberbn.add_edge('user(1)', '<ssh, 1, 2>')
-cyberbn.add_edge('ssh(2)', '<ssh, 1, 2>')
-
-cyberbn.add_edge('<ssh, 1, 2>', 'user(2)')
-
-#THESE NEED TO BE CALCULATED INDEPNEDENTLY!!! BUT FOR NOW WE ARE JUST GOING WITH THIS!!!!!
-
-#generating the probs for independent probs using normal distribution
-
-a = sample_truncated_normal()
-
-serv_Dos_1_cpt = {'T': a, 'F': 1-a}
-
-b = sample_truncated_normal()
-
-priv_user_0_cpt = {'T': b, 'F': 1-b}
-
-c = sample_truncated_normal()
-
-conn_0_1_cpt = {'T': c, 'F': 1-c}
-
-d = sample_truncated_normal()
-
-serv_Exec_1_cpt = {'T': d, 'F': 1-d}
-
-e = sample_truncated_normal()
-
-conn_1_2_cpt = {'T': e, 'F': 1-e}
-
-f = sample_truncated_normal()
-
-serv_ssh_2_cpt = {'T': f, 'F': 1-f}
-
-# vul_dos_0_1_cpt = {'T': 1./2, 'F': 1./2}
-
-#p(v_dos| pre conditions all true) = CVSS(v) / 10. 
-vul_dos_0_1_cpt = { ('T', 'T', 'T'): {'T': .53, 'F': .47},
-                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
-
-# vul_exec_0_1_cpt = {'T': 1./2, 'F': 1./2}
-
-vul_exec_0_1_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
-                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
-
-
-#edges assigned order match order of which column is which
-priv_user_1_cpt = { ('T', 'T'): {'T': 0.93, 'F': .07},
-                   ('T', 'F'): {'T': .093, 'F': .07},
-                   ('F', 'T'): {'T': .093, 'F': .07},
-                   ('F', 'F'): {'T': 0, 'F': 1} }
-
-
-## vul calculator = p(v | s = T, N = T, L = T) = CVSS(v)/10
-vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
-                   ('T', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'T'): {'T': 0, 'F': 1},
-                   ('T', 'F', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'T'): {'T': 0, 'F': 1},
-                   ('F', 'T', 'F'): {'T': 0, 'F': 1},
-                   ('F', 'F', 'F'): {'T': 0, 'F': 1} }
-
-# Needed to add handling here because of the fact that the function joint_probability can't understand single parent node
-# needed to add handling for this.
-priv_user_2_cpt = {'T': {'T': 1, 'F': 0},
-                   'F': {'T': 0, 'F': 1} }
-
-cyberbn.set_cpt('Dos(1)', serv_Dos_1_cpt)
-cyberbn.set_cpt('user(0)', priv_user_0_cpt)
-cyberbn.set_cpt('<0,1>', conn_0_1_cpt)
-cyberbn.set_cpt('Exec(1)', serv_Exec_1_cpt)
-
-cyberbn.set_cpt('<Dos, 0, 1>', vul_dos_0_1_cpt)
-cyberbn.set_cpt('<Exec, 0, 1>', vul_exec_0_1_cpt)
-cyberbn.set_cpt('user(1)', priv_user_1_cpt)
-cyberbn.set_cpt('<1, 2>', conn_1_2_cpt)
-cyberbn.set_cpt('ssh(2)', serv_ssh_2_cpt)
-cyberbn.set_cpt('<ssh, 1, 2>', vul_ssh_1_2_cpt)
-cyberbn.set_cpt('user(2)', priv_user_2_cpt)
-
-print("Parents of <Dos, 0, 1>:", cyberbn.get_parents('<Dos, 0, 1>'))
-
-print("Attack graph tests")
-
-inf = cyberbn.inference(target_node='<ssh, 1, 2>')
-print("Inference on <ssh, 1, 2>. Return prob dist: ", inf)
-
-print(cyberbn.get_ind_ancestors('<ssh, 1, 2>'))
-
-print("###########")
 
