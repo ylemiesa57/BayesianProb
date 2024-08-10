@@ -1,4 +1,4 @@
-from BN import BayesianNetwork, sample_truncated
+from BN_numpy import BayesianNetwork, sample_truncated
 
 complex_bn = BayesianNetwork()
 
@@ -217,8 +217,9 @@ complex_bn.set_cpt('(2,2)', conn_2_2_cpt)
 complex_bn.set_cpt('bof(2,2)', vul_bof_2_2_cpt)
 complex_bn.set_cpt('root(2)', priv_root_2_cpt)
 
-# Top 4: selected based off of highest in degree
-nodes = ['rsh(0,1)', 'ssh(1,2)', 'ssh(0,2)', 'bof(2,2)']
+# Top 3: selected based off of highest in degree
+# 3 3 3 
+nodes = ['rsh(0,1)', 'ssh(1,2)', 'ssh(0,2)']
 
 print(complex_bn.model(
     [complex_bn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
@@ -231,14 +232,17 @@ print(complex_bn.model(
 print(complex_bn.model(
     [complex_bn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
      complex_bn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
+    #  complex_bn.sensitivity_analysis(f'{nodes[2]}', 'pareto'),
      complex_bn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
      [complex_bn.inference(target_node=f'{nodes[0]}')['T'],
      complex_bn.inference(target_node=f'{nodes[1]}')['T'],
+    #  complex_bn.inference(target_node=f'{nodes[2]}')['T'],
      complex_bn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'pareto'))
 
 
-#top 4: selected based off of highest in degree
-nodes = ['trust(0,1)', 'local_bof(2)', 'user(2)', '(0,1)']
+#top 3: selected based off of highest out degree. only three becuase others are all just 1
+# 4 2 2
+nodes = ['rsh(0,1)', '(0,1)', 'ssh(2)']
 
 print(complex_bn.model(
     [complex_bn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
