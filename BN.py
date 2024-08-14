@@ -14,7 +14,9 @@ import scipy.stats as stats
 def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
     # Calculate the lower and upper bounds for the distribution
     a = (low - mean) / std
+    print(a)
     b = (high - mean) / std
+    print(b)
     
     # Generate a random sample
     if interest == 'normal':
@@ -32,8 +34,8 @@ class BayesianNetwork:
         self.edges = {}
         self.cpts = {}
 
-    def copy_cpt(self):
-        return copy.deepcopy(self.cpts)
+    # def copy_cpt(self):
+    #     return copy.deepcopy(self.cpts)
 
     def add_node(self, name, values):
         self.nodes[name] = values
@@ -141,10 +143,10 @@ class BayesianNetwork:
     
     def sensitivity_analysis(self, target_node, normal_or_pareto):
         #variables to set here
-        num_runs = 1000
+        num_runs = 100
         noise_std = 1
 
-        original_bn_cpts = self.copy_cpt()
+        original_bn_cpts = copy.deepcopy(self.cpts)
         ind_ancestors = self.get_ind_ancestors(target_node)
 
         inference_results = []
@@ -181,21 +183,23 @@ class BayesianNetwork:
                 print(target_node, node, round)
 
                 #go back to orgiinal version of cpts
-                self.cpts = copy.deepcopy(original_bn_cpts)
+                self.cpts = original_bn_cpts
 
         return inference_results
     
-    def model(self, top_arrs: list[list], infs: list[int], nodes: list[str], normal_or_pareto) -> str:
+    def model(self, sens_lists: list[list], inf : float, nodes: list[str], normal_or_pareto) -> str:
 
         #each input is a sim result prob for 'T' state
 
         #for each sim result, get the truth value
         diffs = []
-        for i, selected in enumerate(top_arrs):
+        for i, selected in enumerate(sens_lists):
             diff_p = []
             for y, sim in enumerate(selected):
                 #Calculate the corresponding errors as diff, abs, percents
-                diff_p.append(abs(infs[i] - sim) * 1./100)
+                diff_p.append(abs(inf - sim) / inf * 100)
+                print("here it is", inf, sim, abs(inf - sim) / inf * 100)
+                
             diffs.append(diff_p)
     
 
@@ -211,8 +215,12 @@ class BayesianNetwork:
 
         df = pd.DataFrame(dict(zip(nodes, diffs)))
 
+        print(df)
+        print(diffs)
+
         fig = go.Figure()
         for i, node in enumerate(nodes):
+            print(df[node])
             fig.add_trace(go.Box(
                 y=df[node],
                 name=node
@@ -220,8 +228,9 @@ class BayesianNetwork:
 
         fig.update_layout(
             title=f'Inference Error due to {normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
-            xaxis_title='Rank of Centrality',
-            yaxis_title='Inference Error',
+            xaxis_title='Rank of Centrality (In-Degree, Left to Right)',
+            yaxis_range=[-1000, 5000],
+            yaxis_title='Inference Error (%) ',
         )
 
         fig.show()

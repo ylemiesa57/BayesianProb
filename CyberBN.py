@@ -1,5 +1,6 @@
 
 from BN import BayesianNetwork, sample_truncated
+import copy
 
 cyberbn = BayesianNetwork()
 
@@ -42,27 +43,33 @@ cyberbn.add_edge('<ssh, 1, 2>', 'user(2)')
 
 #generating the probs for independent probs using normal distribution
 
-a = sample_truncated()
+a = sample_truncated(low=0.8, high=1)
+
+print("this is a", a)
 
 serv_Dos_1_cpt = {'T': a, 'F': 1-a}
 
-b = sample_truncated()
+b = sample_truncated(low=0.8, high=1)
+
+print("this is a", b)
 
 priv_user_0_cpt = {'T': b, 'F': 1-b}
 
-c = sample_truncated()
+c = sample_truncated(low=0.8, high=1)
+
+print("this is a", c)
 
 conn_0_1_cpt = {'T': c, 'F': 1-c}
 
-d = sample_truncated()
+d = sample_truncated(low=0.8, high=1)
 
 serv_Exec_1_cpt = {'T': d, 'F': 1-d}
 
-e = sample_truncated()
+e = sample_truncated(low=0.8, high=1)
 
 conn_1_2_cpt = {'T': e, 'F': 1-e}
 
-f = sample_truncated()
+f = sample_truncated(low=0.8, high=1)
 
 serv_ssh_2_cpt = {'T': f, 'F': 1-f}
 
@@ -142,42 +149,47 @@ cyberbn.set_cpt('user(2)', priv_user_2_cpt)
 
 # Top K: selected based off of highest in degree
 nodes = ['<Dos, 0, 1>','<Exec, 0, 1>','<ssh, 1, 2>']
+target_node = 'user(2)'
+
+# print(cyberbn.inference(target_node)['T'])
+
+# print(id(cyberbn.cpts))
+# print(id(copy.deepcopy(cyberbn.cpts)))
 
 print(cyberbn.model(
     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')],
-     [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[1]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'normal'))
+     cyberbn.inference(target_node)['T'], nodes, 'normal'))
 
-print(cyberbn.model(
-    [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
-     cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
-     cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
-     [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[1]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'pareto'))
+# print(cyberbn.model(
+#     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
+#      [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
+#      cyberbn.inference(target_node=f'{nodes[1]}')['T'],
+#      cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'pareto'))
 
 
 #top k: selected based off of highest out degree
-nodes = ['user(0)','<0,1>','<1, 2>']
+# nodes = ['user(0)','<0,1>','<1, 2>']
+# target_node = 'user(2)'
 
-print(cyberbn.model(
-    [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
-     cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
-     cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')],
-     [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[1]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'normal'))
+# print(cyberbn.model(
+#     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')],
+#      [cyberbn.inference(target_node)['T'],
+#      cyberbn.inference(target_node)['T'],
+#      cyberbn.inference(target_node)['T']], nodes, 'normal'))
 
-print(cyberbn.model(
-    [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
-     cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
-     cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
-     [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[1]}')['T'],
-     cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'pareto'))
+# print(cyberbn.model(
+#     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
+#      [cyberbn.inference(target_node')['T'],
+#      cyberbn.inference(target_node)['T'],
+#      cyberbn.inference(target_node)['T']], nodes, 'pareto'))
 
 
 # test beteweenus ranked, test what the max diff for a noise infeernce dist is to see if it makes that much of a difference

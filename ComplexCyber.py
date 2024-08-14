@@ -1,4 +1,4 @@
-from BN_numpy import BayesianNetwork, sample_truncated
+from BN_libraries import BayesianNetwork, sample_truncated
 
 complex_bn = BayesianNetwork()
 
