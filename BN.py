@@ -5,14 +5,22 @@ import itertools
 import copy
 import plotly.graph_objects as go
 import pandas as pd
-
-#normal dist: N(0,1)
-#Heavy tailed dist: Pareto
-
+import random
 import scipy.stats as stats
+import numpy as np
+import csv
+import os
+
+def logit(p):
+    return np.log(p / (1 - p))
+
+def inverse_logit(x):
+    return 1 / (1 + np.exp(-x))
 
 def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
     # Calculate the lower and upper bounds for the distribution
+    #normal dist: N(0,1)
+    #Heavy tailed dist: Pareto
     a = (low - mean) / std
     print(a)
     b = (high - mean) / std
@@ -76,6 +84,7 @@ class BayesianNetwork:
     
     def modify_ind_cpt(self, node, change):
         self.cpts[node]['T'] = (self.cpts[node]['T'] + change) % 1
+        print('modified ind cpt', self.cpts[node]['T'])
         self.cpts[node]['F'] = 1 - self.cpts[node]['T']
         
     def joint_probability(self, **kwargs):
@@ -143,7 +152,7 @@ class BayesianNetwork:
     
     def sensitivity_analysis(self, target_node, normal_or_pareto):
         #variables to set here
-        num_runs = 100
+        num_runs = 10
         noise_std = 1
 
         original_bn_cpts = copy.deepcopy(self.cpts)
@@ -155,19 +164,22 @@ class BayesianNetwork:
                 #cautious check to make sure the cpts of node can be even updated
                 if node in self.cpts:
                     for state in self.cpts[node]:
+                        #convert to logit here
+                        logit_prob = logit(self.cpts[node][state])
                         #select distribution here
                         gen_noise = sample_truncated(0,noise_std,0,1, normal_or_pareto)
                         if normal_or_pareto == "pareto":
                             gen_noise = sample_truncated(std=noise_std,low=1,high=2, interest=normal_or_pareto)
 
-                        pos_or_neg = np.random.normal(0, noise_std)
-                        if pos_or_neg < 0:
-                            pos_or_neg = -1
-                        pos_or_neg = 1
+                        # pos_or_neg = np.random.normal(0, noise_std)
+                        # if pos_or_neg < 0:
+                        #     pos_or_neg = -1
+                        # pos_or_neg = 1
 
+                        noisy_logit = logit_prob + random.choice([-1, 1]) * gen_noise
 
                         #below just makes it so that the output state is always been 0 and 1
-                        self.cpts[node][state] = min(max(self.cpts[node][state] + pos_or_neg*gen_noise, 0), 1)
+                        self.cpts[node][state] = inverse_logit(noisy_logit)
                         
 
 
@@ -185,9 +197,30 @@ class BayesianNetwork:
                 #go back to orgiinal version of cpts
                 self.cpts = original_bn_cpts
 
+        # Write the list of inferences to filee
+        base_path = "saved"
+        file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}'
+        num = 0
+        while os.path.exists(os.path.join(base_path, file_path + ".csv")):
+            print(f"The file '{file_path}' already exists.")
+            num+=1
+            file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}_{num}'
+            # Decide what to do here (e.g., append to the existing file, or overwrite it)
+        
+        file_path += ".csv"
+        full_path = os.path.join(base_path, file_path)
+
+        try:
+            with open(full_path, "x", newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(inference_results)  # Write all items in one row
+            print(f"File '{file_path}' has been created successfully.")
+        except FileExistsError:
+            print(f"Error: The file '{file_path}' already exists.")
+
         return inference_results
     
-    def model(self, sens_lists: list[list], inf : float, nodes: list[str], normal_or_pareto) -> str:
+    def model(self, sens_lists: list[list], inf : float, nodes: list[str], normal_or_pareto, roc) -> str:
 
         #each input is a sim result prob for 'T' state
 
@@ -197,8 +230,8 @@ class BayesianNetwork:
             diff_p = []
             for y, sim in enumerate(selected):
                 #Calculate the corresponding errors as diff, abs, percents
-                diff_p.append(abs(inf - sim) / inf * 100)
-                print("here it is", inf, sim, abs(inf - sim) / inf * 100)
+                diff_p.append(abs(inf - sim) / inf)
+                # print("here it is", inf, sim, abs(inf - sim) / inf * 100)
                 
             diffs.append(diff_p)
     
@@ -228,9 +261,8 @@ class BayesianNetwork:
 
         fig.update_layout(
             title=f'Inference Error due to {normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
-            xaxis_title='Rank of Centrality (In-Degree, Left to Right)',
-            yaxis_range=[-1000, 5000],
-            yaxis_title='Inference Error (%) ',
+            xaxis_title=f'Rank of Centrality ({roc}, Left to Right)',
+            yaxis_title='Inference Error abs (inf - sim)',
         )
 
         fig.show()

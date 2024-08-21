@@ -104,7 +104,7 @@ priv_user_1_cpt = { ('T', 'T'): {'T': 0.93, 'F': .07},
 
 
 ## vul calculator = p(v | s = T, N = T, L = T) = CVSS(v)/10
-vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .092},
+vul_ssh_1_2_cpt = { ('T', 'T', 'T'): {'T': .08, 'F': .92},
                    ('T', 'T', 'F'): {'T': 0, 'F': 1},
                    ('T', 'F', 'T'): {'T': 0, 'F': 1},
                    ('F', 'T', 'T'): {'T': 0, 'F': 1},
@@ -151,48 +151,45 @@ cyberbn.set_cpt('user(2)', priv_user_2_cpt)
 nodes = ['<Dos, 0, 1>','<Exec, 0, 1>','<ssh, 1, 2>']
 target_node = 'user(2)'
 
-# print(cyberbn.inference(target_node)['T'])
+print(cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'))
+
+# print(cyberbn.inference('user(2)')['T'])
 
 # print(id(cyberbn.cpts))
 # print(id(copy.deepcopy(cyberbn.cpts)))
 
-print(cyberbn.model(
-    [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
-     cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
-     cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')],
-     cyberbn.inference(target_node)['T'], nodes, 'normal'))
+# print(cyberbn.model( 
+#     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')], 
+#      cyberbn.inference(target_node)['T'], nodes, 'normal', "In-degree")) 
 
-# print(cyberbn.model(
+# print(cyberbn.model( 
 #     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
 #      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
-#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
-#      [cyberbn.inference(target_node=f'{nodes[0]}')['T'],
-#      cyberbn.inference(target_node=f'{nodes[1]}')['T'],
-#      cyberbn.inference(target_node=f'{nodes[2]}')['T']], nodes, 'pareto'))
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')], 
+#      cyberbn.inference(target_node)['T'], nodes, 'pareto', "In-degree")) 
 
 
-#top k: selected based off of highest out degree
+# #top k: selected based off of highest out degree
 # nodes = ['user(0)','<0,1>','<1, 2>']
 # target_node = 'user(2)'
 
-# print(cyberbn.model(
+# print(cyberbn.model( 
 #     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'normal'), 
 #      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'normal'), 
-#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')],
-#      [cyberbn.inference(target_node)['T'],
-#      cyberbn.inference(target_node)['T'],
-#      cyberbn.inference(target_node)['T']], nodes, 'normal'))
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'normal')], 
+#      cyberbn.inference(target_node)['T'], nodes, 'normal', "Out-degree")) 
 
-# print(cyberbn.model(
+# print(cyberbn.model( 
 #     [cyberbn.sensitivity_analysis(f'{nodes[0]}', 'pareto'), 
 #      cyberbn.sensitivity_analysis(f'{nodes[1]}', 'pareto'), 
-#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')],
-#      [cyberbn.inference(target_node')['T'],
-#      cyberbn.inference(target_node)['T'],
-#      cyberbn.inference(target_node)['T']], nodes, 'pareto'))
+#      cyberbn.sensitivity_analysis(f'{nodes[2]}', 'pareto')], 
+#      cyberbn.inference(target_node)['T'], nodes, 'pareto', "Out-degree")) 
 
 
 # test beteweenus ranked, test what the max diff for a noise infeernce dist is to see if it makes that much of a difference
 
 print("###########")
+
 
