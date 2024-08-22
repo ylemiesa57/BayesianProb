@@ -1,49 +1,35 @@
-###Code from scratch model, copying the functionality of pomegranate
 import numpy as np
-from scipy import stats
-import itertools
 import copy
+from scipy.stats import truncnorm, truncpareto
+from scipy.special import logit, expit
+import itertools
+import csv
+import os
 import plotly.graph_objects as go
 import pandas as pd
 import random
-import scipy.stats as stats
-import numpy as np
-import csv
-import os
+from functools import lru_cache
 
-def logit(p):
-    return np.log(p / (1 - p))
+# # Efficient sampling
+def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
+    a = (low - mean) / std
+    b = (high - mean) / std
+
+    if interest == 'normal':
+        return float(truncnorm.rvs(a, b, loc=mean, scale=std))
+    elif interest == 'pareto':
+        return float(truncpareto.rvs(1, 2) - 1)
+    else:
+        raise ValueError("Invalid 'interest' parameter. Must be 'normal' or 'pareto'.")
 
 def inverse_logit(x):
     return 1 / (1 + np.exp(-x))
-
-def sample_truncated(mean=0, std=1, low=0, high=1, interest='normal'):
-    # Calculate the lower and upper bounds for the distribution
-    #normal dist: N(0,1)
-    #Heavy tailed dist: Pareto
-    a = (low - mean) / std
-    print(a)
-    b = (high - mean) / std
-    print(b)
-    
-    # Generate a random sample
-    if interest == 'normal':
-        return float(stats.truncnorm.rvs(a, b, loc=mean, scale=std))
-    elif interest == 'pareto':
-        shape = std
-        #to be able to customize later
-        return float(stats.truncpareto.rvs(1, 2) - 1)
-    else:
-        raise ValueError("Invalid 'interest' parameter. Must be 'normal' or 'pareto'.")
 
 class BayesianNetwork:
     def __init__(self):
         self.nodes = {}
         self.edges = {}
         self.cpts = {}
-
-    # def copy_cpt(self):
-    #     return copy.deepcopy(self.cpts)
 
     def add_node(self, name, values):
         self.nodes[name] = values
@@ -56,12 +42,66 @@ class BayesianNetwork:
     def set_cpt(self, node, cpt):
         self.cpts[node] = cpt
 
+    def save_cpts(self):
+        base_path = "cpts"
+        file_path = f'saved_cpt'
+        num = 0
+        while os.path.exists(os.path.join(base_path, file_path + ".csv")):
+            print(f"The file '{file_path}' already exists.")
+            num+=1
+            file_path = f'saved_cpt({num})'
+            # Decide what to do here (e.g., append to the existing file, or overwrite it)
+
+        file_path += ".csv"
+        full_path = os.path.join(base_path, file_path)
+
+        try:
+            with open(full_path, "x", newline= '') as file:
+                writer = csv.writer(file)
+                for node in self.cpts:
+                    writer.writerow(f"{node}: {self.cpts[node]}")
+            print(f"File '{file_path}' has been created successfully.")
+        except FileExistsError:
+            print(f"Error: The file '{file_path}' already exists.")
+
+    @lru_cache(maxsize=None)
+    def read_infs(self, filepath):
+        try:
+            if os.path.exists(filepath):
+                with open(filepath, "r") as file:
+                    reader = csv.reader(file)
+                    return [float(i) for i in next(reader)]
+            else:
+                raise FileNotFoundError("Path doesn't exist")
+        except Exception as e:
+            print(f"Error reading file: {e}")
+            return []
+
+    @lru_cache(maxsize=None)
     def get_parents(self, node):
-        parents = []
-        for parent, children in self.edges.items():
-            if node in children:
-                parents.append(parent)
-        return parents
+        return [parent for parent, children in self.edges.items() if node in children]
+
+    def get_ind_ancestors(self, node, visited=None):
+        if visited is None:
+            visited = set()
+
+        if node in visited:
+            return set()
+
+        visited.add(node)
+        parents = self.get_parents(node)
+
+        if not parents:
+            return {node}
+
+        ancestors = set()
+        for parent in parents:
+            ancestors.update(self.get_ind_ancestors(parent, visited))
+
+        return ancestors
+
+
+    
 
     def get_ind_ancestors(self, node, visited=None):
         if visited is None:
@@ -103,164 +143,88 @@ class BayesianNetwork:
                     prob *= self.cpts[node][parent_values][value]
         return prob
 
-    # should return the probability for each state of a random variable based on its parent nodes and the relationships
-    def inference (self, target_node, **kwargs):
-        '''
-        perform inference on one reandom variable at a time based on other variables..
-
-        think about doing a few variables at a time? inference + joint probability?
-        '''
-        non_specific_nodes = []
-        for node in self.nodes:
-            if node != target_node and node not in kwargs:
-                non_specific_nodes.append(node)
-
-        # # possible combinations of states
-        # possible_states = self.nodes[target_node]
-
+    def inference(self, target_node, **kwargs):
+        non_specific_nodes = [node for node in self.nodes if node != target_node and node not in kwargs]
         all_combos = list(itertools.product(*[self.nodes[var] for var in non_specific_nodes]))
 
-        # Initialize a dictionary to hold the probabilities for each state of the target_node. build it up as we go
         target_probabilities = {state: 0.0 for state in self.nodes[target_node]}
 
-        # Iterate over each state of the target_node
         for target_state in self.nodes[target_node]:
-            # Iterate over each combination of unspecified variable states and try to 
             for combination in all_combos:
-                # Create a full assignment for all variables.
-
-                # add the known arguments for the variables we want to customize or set
                 full_assignment = kwargs.copy()
-                # add the target for inference that we want to predict the probability it is in a certain state?
                 full_assignment[target_node] = target_state
-                # update with the combos of all the variables that we know won't work
                 full_assignment.update(dict(zip(non_specific_nodes, combination)))
-                
-                # Calculate the joint probability for this assignment. perform joint probability calculation
                 joint_prob = self.joint_probability(**full_assignment)
-                
-                # Add the joint probability to the corresponding state of the target_node. iterating through the for loop updates the variables with probabilities.
                 target_probabilities[target_state] += joint_prob
-        
 
-     # Normalize the probabilities to sum to 1
         total_prob = sum(target_probabilities.values())
-        for state in target_probabilities:
-            target_probabilities[state] /= total_prob
+        return {state: prob / total_prob for state, prob in target_probabilities.items()}
 
-        return target_probabilities
-    
-    def sensitivity_analysis(self, target_node, normal_or_pareto):
-        #variables to set here
-        num_runs = 10
+    def sensitivity_analysis(self, target_node, final_node, normal_or_pareto):
+        num_runs = 10000
         noise_std = 1
 
         original_bn_cpts = copy.deepcopy(self.cpts)
         ind_ancestors = self.get_ind_ancestors(target_node)
 
         inference_results = []
-        for round in range(num_runs):
+        for _ in range(num_runs):
             for node in ind_ancestors:
-                #cautious check to make sure the cpts of node can be even updated
                 if node in self.cpts:
                     for state in self.cpts[node]:
-                        #convert to logit here
                         logit_prob = logit(self.cpts[node][state])
-                        #select distribution here
-                        gen_noise = sample_truncated(0,noise_std,0,1, normal_or_pareto)
-                        if normal_or_pareto == "pareto":
-                            gen_noise = sample_truncated(std=noise_std,low=1,high=2, interest=normal_or_pareto)
-
-                        # pos_or_neg = np.random.normal(0, noise_std)
-                        # if pos_or_neg < 0:
-                        #     pos_or_neg = -1
-                        # pos_or_neg = 1
-
+                        gen_noise = sample_truncated(0, noise_std, 0, 1, normal_or_pareto)
                         noisy_logit = logit_prob + random.choice([-1, 1]) * gen_noise
+                        self.cpts[node][state] = expit(noisy_logit)
 
-                        #below just makes it so that the output state is always been 0 and 1
-                        self.cpts[node][state] = inverse_logit(noisy_logit)
-                        
-
-
-                #divide by sum to normalize to 1
                 total_prob = sum(self.cpts[node].values())
                 for state in self.cpts[node]:
                     self.cpts[node][state] /= total_prob
-                
-                #perform inference
-                inference_result = self.inference(target_node)
-                inference_results.append(inference_result['T'])
 
-                print(target_node, node, round)
+            inference_result = self.inference(final_node)
+            inference_results.append(inference_result['T'])
 
-                #go back to orgiinal version of cpts
-                self.cpts = original_bn_cpts
+            self.cpts = original_bn_cpts
 
-        # Write the list of inferences to filee
+        return self._save_results(inference_results, target_node, normal_or_pareto, noise_std, num_runs)
+
+    def _save_results(self, results, target_node, normal_or_pareto, noise_std, num_runs):
         base_path = "saved"
+        if not os.path.exists(base_path):
+            os.makedirs(base_path)
+
         file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}'
         num = 0
         while os.path.exists(os.path.join(base_path, file_path + ".csv")):
-            print(f"The file '{file_path}' already exists.")
-            num+=1
+            num += 1
             file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}_{num}'
-            # Decide what to do here (e.g., append to the existing file, or overwrite it)
-        
-        file_path += ".csv"
-        full_path = os.path.join(base_path, file_path)
 
+        full_path = os.path.join(base_path, file_path + ".csv")
         try:
-            with open(full_path, "x", newline='') as file:
+            with open(full_path, "w", newline='') as file:
                 writer = csv.writer(file)
-                writer.writerow(inference_results)  # Write all items in one row
+                writer.writerow(results)
             print(f"File '{file_path}' has been created successfully.")
-        except FileExistsError:
-            print(f"Error: The file '{file_path}' already exists.")
+        except Exception as e:
+            print(f"Error saving results: {e}")
 
-        return inference_results
-    
-    def model(self, sens_lists: list[list], inf : float, nodes: list[str], normal_or_pareto, roc) -> str:
+        return results
 
-        #each input is a sim result prob for 'T' state
+    def model(self, sens_lists: list[list], inf: float, nodes: list[str], normal_or_pareto: str, roc: str) -> str:
+        diffs = [ [abs(inf - sim) / inf * 100. for sim in selected] for selected in sens_lists ]
 
-        #for each sim result, get the truth value
-        diffs = []
-        for i, selected in enumerate(sens_lists):
-            diff_p = []
-            for y, sim in enumerate(selected):
-                #Calculate the corresponding errors as diff, abs, percents
-                diff_p.append(abs(inf - sim) / inf)
-                # print("here it is", inf, sim, abs(inf - sim) / inf * 100)
-                
-            diffs.append(diff_p)
-    
-
-        print(len(diffs[0]),len(diffs[1]), len(diffs[2]))
-
-
-        max_len = max([len(ele) for ele in diffs])
-
+        max_len = max(len(diff) for diff in diffs)
         for diff in diffs:
-            if len(diff) < max_len:
-                diff.extend([""]*(max_len-len(diff)))
-        
+            diff.extend([""] * (max_len - len(diff)))
 
         df = pd.DataFrame(dict(zip(nodes, diffs)))
 
-        print(df)
-        print(diffs)
-
         fig = go.Figure()
-        for i, node in enumerate(nodes):
-            print(df[node])
-            fig.add_trace(go.Box(
-                y=df[node],
-                name=node
-            ))
+        for node in nodes:
+            fig.add_trace(go.Box(y=df[node], name=node))
 
         fig.update_layout(
-            title=f'Inference Error due to {normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
+            title=f'Inference Error due to {normal_or_pareto.capitalize()} Noise',
             xaxis_title=f'Rank of Centrality ({roc}, Left to Right)',
             yaxis_title='Inference Error abs (inf - sim)',
         )
@@ -268,6 +232,205 @@ class BayesianNetwork:
         fig.show()
 
         return 'Completed'
+
+
+
+
+#####
+
+
+
+    # def read_infs(self, filepath):
+    #     try:
+    #         if os.path.exists(filepath):
+    #             with open(filepath, "r") as file:
+    #                 #generator
+    #                 print("reading")
+    #                 reader = csv.reader(file)
+    #                 inferences = [float(i) for i in list(next(reader))]
+    #         else:
+    #             raise FileExistsError
+    #     except FileExistsError:
+    #         print("Path doesn't exist")
+
+    #     return inferences
+
+    # def get_parents(self, node):
+    #     parents = []
+    #     for parent, children in self.edges.items():
+    #         if node in children:
+    #             parents.append(parent)
+    #     return parents
+
+    #
+        # # should return the probability for each state of a random variable based on its parent nodes and the relationships
+    # def inference (self, target_node, **kwargs):
+    #     '''
+    #     perform inference on one reandom variable at a time based on other variables..
+
+    #     think about doing a few variables at a time? inference + joint probability?
+    #     '''
+    #     non_specific_nodes = []
+    #     for node in self.nodes:
+    #         if node != target_node and node not in kwargs:
+    #             non_specific_nodes.append(node)
+
+    #     # # possible combinations of states
+    #     # possible_states = self.nodes[target_node]
+
+    #     all_combos = list(itertools.product(*[self.nodes[var] for var in non_specific_nodes]))
+
+    #     # Initialize a dictionary to hold the probabilities for each state of the target_node. build it up as we go
+    #     target_probabilities = {state: 0.0 for state in self.nodes[target_node]}
+
+    #     # Iterate over each state of the target_node
+    #     for target_state in self.nodes[target_node]:
+    #         # Iterate over each combination of unspecified variable states and try to 
+    #         for combination in all_combos:
+    #             # Create a full assignment for all variables.
+
+    #             # add the known arguments for the variables we want to customize or set
+    #             full_assignment = kwargs.copy()
+    #             # add the target for inference that we want to predict the probability it is in a certain state?
+    #             full_assignment[target_node] = target_state
+    #             # update with the combos of all the variables that we know won't work
+    #             full_assignment.update(dict(zip(non_specific_nodes, combination)))
+                
+    #             # Calculate the joint probability for this assignment. perform joint probability calculation
+    #             joint_prob = self.joint_probability(**full_assignment)
+                
+    #             # Add the joint probability to the corresponding state of the target_node. iterating through the for loop updates the variables with probabilities.
+    #             target_probabilities[target_state] += joint_prob
+        
+
+    #  # Normalize the probabilities to sum to 1
+    #     total_prob = sum(target_probabilities.values())
+    #     for state in target_probabilities:
+    #         target_probabilities[state] /= total_prob
+
+    #     return target_probabilities
+
+
+    # def sensitivity_analysis(self, target_node, final_node, normal_or_pareto):
+    #     #variables to set here
+    #     num_runs = 5000
+    #     noise_std = 1
+
+    #     original_bn_cpts = copy.deepcopy(self.cpts)
+    #     ind_ancestors = self.get_ind_ancestors(target_node)
+
+    #     inference_results = []
+    #     for round in range(num_runs):
+    #         for node in ind_ancestors:
+    #             #cautious check to make sure the cpts of node can be even updated
+    #             if node in self.cpts:
+    #                 for state in self.cpts[node]:
+    #                     #convert to logit here
+    #                     logit_prob = logit(self.cpts[node][state])
+    #                     #select distribution here
+    #                     gen_noise = sample_truncated(0,noise_std,0,1, normal_or_pareto)
+    #                     if normal_or_pareto == "pareto":
+    #                         gen_noise = sample_truncated(std=noise_std,low=1,high=2, interest=normal_or_pareto)
+
+    #                     # pos_or_neg = np.random.normal(0, noise_std)
+    #                     # if pos_or_neg < 0:
+    #                     #     pos_or_neg = -1
+    #                     # pos_or_neg = 1
+
+    #                     noisy_logit = logit_prob + random.choice([-1, 1]) * gen_noise
+
+    #                     #below just makes it so that the output state is always been 0 and 1
+    #                     self.cpts[node][state] = inverse_logit(noisy_logit)
+                        
+
+
+    #             #divide by sum to normalize to 1
+    #             total_prob = sum(self.cpts[node].values())
+    #             for state in self.cpts[node]:
+    #                 self.cpts[node][state] /= total_prob
+                
+    #             #perform inference
+    #             inference_result = self.inference(final_node)
+    #             inference_results.append(inference_result['T'])
+
+    #             print(target_node, node, round)
+
+    #             #go back to orgiinal version of cpts
+    #             self.cpts = original_bn_cpts
+
+    #     # Write the list of inferences to filee
+    #     base_path = "saved"
+    #     file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}'
+    #     num = 0
+    #     while os.path.exists(os.path.join(base_path, file_path + ".csv")):
+    #         print(f"The file '{file_path}' already exists.")
+    #         num+=1
+    #         file_path = f'{noise_std}_{num_runs}_{target_node}_{normal_or_pareto}_{num}'
+    #         # Decide what to do here (e.g., append to the existing file, or overwrite it)
+        
+    #     file_path += ".csv"
+    #     full_path = os.path.join(base_path, file_path)
+
+    #     try:
+    #         with open(full_path, "x", newline='') as file:
+    #             writer = csv.writer(file)
+    #             writer.writerow(inference_results)  # Write all items in one row
+    #         print(f"File '{file_path}' has been created successfully.")
+    #     except FileExistsError:
+    #         print(f"Error: The file '{file_path}' already exists.")
+
+    #     return inference_results
+    
+    # def model(self, sens_lists: list[list], inf : float, nodes: list[str], normal_or_pareto, roc) -> str:
+
+    #     #each input is a sim result prob for 'T' state
+
+    #     #for each sim result, get the truth value
+    #     diffs = []
+    #     for i, selected in enumerate(sens_lists):
+    #         diff_p = []
+    #         for y, sim in enumerate(selected):
+    #             #Calculate the corresponding errors as diff, abs, percents
+    #             diff_p.append(abs(inf - sim) / inf * 100.)
+    #             # print("here it is", inf, sim, abs(inf - sim) / inf * 100)
+                
+    #         diffs.append(diff_p)
+    
+
+    #     print(len(diffs[0]),len(diffs[1]), len(diffs[2]))
+
+
+    #     max_len = max([len(ele) for ele in diffs])
+
+    #     for diff in diffs:
+    #         if len(diff) < max_len:
+    #             diff.extend([""]*(max_len-len(diff)))
+        
+
+    #     df = pd.DataFrame(dict(zip(nodes, diffs)))
+
+    #     print(df)
+    #     print(diffs)
+
+    #     fig = go.Figure()
+    #     for i, node in enumerate(nodes):
+    #         print(df[node])
+    #         fig.add_trace(go.Box(
+    #             y=df[node],
+    #             name=node
+    #         ))
+
+    #     fig.update_layout(
+    #         title=f'Inference Error due to {normal_or_pareto[0].upper() + normal_or_pareto[1:]} Noise',
+    #         xaxis_title=f'Rank of Centrality ({roc}, Left to Right)',
+    #         yaxis_title='Inference Error abs (inf - sim)',
+    #     )
+
+    #     fig.show()
+
+    #     return 'Completed'
+    
+
 
 
 
