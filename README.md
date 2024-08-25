@@ -63,3 +63,12 @@ Use case:
 
 Joint Probability: Used when you want the probability of a specific scenario.
 Inference: Used when you want to predict the probability distribution of a variable given some evidence.
+
+
+
+
+
+# Introduction to Higher Level functions
+## Developed more on noise applications, introduce KL divergence
+
+### KL(P||Q) = Σ P(x) * log(P(x) / Q(x)) --> KL divergence
