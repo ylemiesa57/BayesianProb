@@ -1,0 +1,9 @@
+numpy>=1.24
+scipy>=1.10
+pandas>=1.5
+plotly>=5.0
+# Only needed by BayesianLibraries.py (the pomegranate-based Monty Hall
+# reference implementation). BN.py, CyberBN.py, ComplexCyber.py, and
+# Monte_hall.py use the from-scratch BayesianNetwork class and do not
+# require it.
+pomegranate
