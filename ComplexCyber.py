@@ -21,14 +21,6 @@ complex_bn.add_node('(0,2)', ['T', 'F'])
 complex_bn.add_node('ssh(1,2)', ['T', 'F'])
 complex_bn.add_node('ssh(0,2)', ['T', 'F'])
 
-complex_bn.add_node('user(2)', ['T', 'F']) 
-complex_bn.add_node('local_bof(2)', ['T', 'F']) 
-complex_bn.add_node('(2,2)', ['T', 'F'])
-complex_bn.add_node('(0,2)', ['T', 'F'])
-
-complex_bn.add_node('ssh(1,2)', ['T', 'F'])
-complex_bn.add_node('ssh(0,2)', ['T', 'F'])
-
 complex_bn.add_node('user(2)', ['T', 'F'])
 complex_bn.add_node('local_bof(2)', ['T', 'F'])
 complex_bn.add_node('(2,2)', ['T', 'F'])
