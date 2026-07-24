@@ -134,8 +134,9 @@ class BayesianNetwork:
 
      # Normalize the probabilities to sum to 1
         total_prob = sum(target_probabilities.values())
-        for state in target_probabilities:
-            target_probabilities[state] /= total_prob
+        if total_prob > 0:
+            for state in target_probabilities:
+                target_probabilities[state] /= total_prob
 
         return target_probabilities
     
@@ -161,7 +162,8 @@ class BayesianNetwork:
                         pos_or_neg = np.random.normal(0, noise_std)
                         if pos_or_neg < 0:
                             pos_or_neg = -1
-                        pos_or_neg = 1
+                        else:
+                            pos_or_neg = 1
 
 
                         #below just makes it so that the output state is always been 0 and 1
@@ -171,8 +173,9 @@ class BayesianNetwork:
 
                 #divide by sum to normalize to 1
                 total_prob = sum(self.cpts[node].values())
-                for state in self.cpts[node]:
-                    self.cpts[node][state] /= total_prob
+                if total_prob > 0:
+                    for state in self.cpts[node]:
+                        self.cpts[node][state] /= total_prob
                 
                 #perform inference
                 inference_result = self.inference(target_node)
