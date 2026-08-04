@@ -7,3 +7,6 @@ plotly>=5.0
 # Monte_hall.py use the from-scratch BayesianNetwork class and do not
 # require it.
 pomegranate
+
+# Test suite (tests/) — not needed to run the scripts themselves.
+pytest>=7.0
