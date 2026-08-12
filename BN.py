@@ -192,6 +192,19 @@ class BayesianNetwork:
 
         #each input is a sim result prob for 'T' state
 
+        # top_arrs, infs, and nodes must all describe the same set of
+        # selected nodes. This used to be assumed silently: since diffs
+        # ends up zipped against nodes below, passing e.g. 4 node names but
+        # only 3 top_arrs/infs entries (as ComplexCyber.py's "Top 4"
+        # sections did) meant the 4th node was dropped from the plot with
+        # no error or warning at all.
+        if not (len(top_arrs) == len(infs) == len(nodes)):
+            raise ValueError(
+                f"model() got mismatched lengths: top_arrs={len(top_arrs)}, "
+                f"infs={len(infs)}, nodes={len(nodes)}. All three must "
+                "describe the same set of selected nodes."
+            )
+
         #for each sim result, get the truth value
         diffs = []
         for i, selected in enumerate(top_arrs):
@@ -204,7 +217,7 @@ class BayesianNetwork:
 
 
 
-        print(len(diffs[0]),len(diffs[1]), len(diffs[2]))
+        print([len(diff) for diff in diffs])
 
 
         max_len = max([len(ele) for ele in diffs])
