@@ -211,7 +211,7 @@ class BayesianNetwork:
             diff_p = []
             for y, sim in enumerate(selected):
                 #Calculate the corresponding errors as diff, abs, percents
-                diff_p.append(abs(infs[i] - sim) * 1./100)
+                diff_p.append(abs(infs[i] - sim))
             diffs.append(diff_p)
         
 
