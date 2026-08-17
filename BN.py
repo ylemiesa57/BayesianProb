@@ -95,7 +95,7 @@ class BayesianNetwork:
     # should return the probability for each state of a random variable based on its parent nodes and the relationships
     def inference (self, target_node, **kwargs):
         '''
-        perform inference on one reandom variable at a time based on other variables..
+        perform inference on one random variable at a time based on other variables..
 
         think about doing a few variables at a time? inference + joint probability?
         '''
